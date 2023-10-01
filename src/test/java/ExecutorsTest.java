@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalTime;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -142,5 +143,29 @@ public class ExecutorsTest {
         executor.shutdown();
         executor.awaitTermination(20, TimeUnit.SECONDS); // 블로킹 걸기 위함
         System.out.println("end");
+    }
+
+    @Test
+    @DisplayName("ScheduledExecutorService는 ExecutorService를 상속 받은 인터페이스로 특정 시간 이후에 작업을 실행할 수 있다.")
+    void testScheduledExecutorServiceSchedule() throws InterruptedException {
+        System.out.println("start");
+        ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+
+        scheduledExecutorService.schedule(() -> System.out.println("After 3 seconds..."), 3, TimeUnit.SECONDS);
+
+        Thread.sleep(5000);
+        scheduledExecutorService.shutdown();
+    }
+
+    @Test
+    @DisplayName("ScheduledExecutorService는 ExecutorService를 상속 받은 인터페이스로 특정 시간 이후에 또는 주기적으로 작업을 실행할 수 있다.")
+    void testScheduledExecutorServiceFixtedRate() throws InterruptedException {
+        System.out.println("start");
+        ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+
+        scheduledExecutorService.scheduleAtFixedRate(() -> System.out.println("Period is 2 seconds..."), 3, 2, TimeUnit.SECONDS);
+
+        Thread.sleep(10000);
+        scheduledExecutorService.shutdown();
     }
 }
