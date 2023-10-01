@@ -5,5 +5,6 @@
 * `ExecutorTest`
 * `FutureText`
 * `FutureTaskTest`
+* `CompleteFutureTest`
 * `CallbackTest`
 * `ConcurrentExampleTest`
