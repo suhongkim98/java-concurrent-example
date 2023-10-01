@@ -20,6 +20,24 @@ public class FutureTest {
     }
 
     @Test
+    @DisplayName("executore.submit(..) 파라미터로 Runnable 혹은 Callable 을 넣을 수 있다.")
+    void testSubmitParams() {
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+
+        // Runnable은 반환 값이 void 이기 때문에, 작업을 처리하는 것 뿐 작업 결과를 리턴할 수 없었다.
+        Runnable runnable = () -> { // void형 리턴
+            System.out.println("hi");
+        };
+        executor.submit(runnable);
+
+        // Callable은 Runnable과 유사하지만, 작업의 결과를 받을 수 있다는 차이가 있다.
+        Callable<String> callable = () -> {
+            return "hello";
+        }; // return String
+        executor.submit(callable);
+    }
+
+    @Test
     @DisplayName("future.get()로 작업이 종료될 때 까지 기다리고 그 결과를 출력할 수 있다.")
     void testFutureGet() {
         final int maxCore = Runtime.getRuntime().availableProcessors();
