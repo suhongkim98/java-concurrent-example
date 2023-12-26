@@ -20,6 +20,7 @@ public class ExecutorsTest {
          * newCachedThreadPool(): 필요할 때, 필요한 만큼 쓰레드풀을 생성합니다. 이미 생성된 쓰레드를 재활용할 수 있기 때문에 성능상의 이점이 있을 수 있습니다.
          * newScheduledThreadPool(int): 일정 시간 뒤에 실행되는 작업이나, 주기적으로 수행되는 작업이 있다면 ScheduledThreadPool을 고려해볼 수 있습니다.
          * newSingleThreadExecutor(): 쓰레드 1개인 ExecutorService를 리턴합니다. 싱글 쓰레드에서 동작해야 하는 작업을 처리할 때 사용합니다.
+         * newVirtualThreadPerTaskExecutor(): 가상스레드를 생성합니다. Executors로 가상스레드를 다루고 싶을 때 사용
          */
 
         // 4개의 스레드를 가진 스레드풀 생성하기
@@ -28,6 +29,8 @@ public class ExecutorsTest {
         // SingleThreadExecutor는 Thread가 1개인 Executor입니다. 1개이기 때문에 작업을 예약한 순서대로 처리를 합니다.
         // 스레드가 1개 뿐이니 동시성(Concurrency)을 고려할 필요가 없습니다.
         ExecutorService singleThreadExecutor = Executors.newSingleThreadExecutor();
+
+        ExecutorService virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
     }
 
     /**
