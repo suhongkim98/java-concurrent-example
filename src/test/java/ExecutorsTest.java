@@ -269,19 +269,38 @@ public class ExecutorsTest {
         System.out.println("start");
         ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
 
+        scheduledExecutorService.schedule(() -> System.out.println("After 1 seconds..."), 1, TimeUnit.SECONDS);
+        scheduledExecutorService.schedule(() -> System.out.println("After 2 seconds..."), 2, TimeUnit.SECONDS);
         scheduledExecutorService.schedule(() -> System.out.println("After 3 seconds..."), 3, TimeUnit.SECONDS);
+        scheduledExecutorService.schedule(() -> System.out.println("After 5 seconds..."), 5, TimeUnit.SECONDS);
 
-        Thread.sleep(5000);
+        Thread.sleep(8000);
         scheduledExecutorService.shutdown();
     }
 
     @Test
-    @DisplayName("ScheduledExecutorService는 ExecutorService를 상속 받은 인터페이스로 특정 시간 이후에 또는 주기적으로 작업을 실행할 수 있다.")
+    @DisplayName("ScheduledExecutorService는 ExecutorService를 상속 받은 인터페이스로 주기적으로 작업을 실행할 수 있다.")
     void testScheduledExecutorServiceFixtedRate() throws InterruptedException {
         System.out.println("start");
         ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
 
-        scheduledExecutorService.scheduleAtFixedRate(() -> System.out.println("Period is 2 seconds..."), 3, 2, TimeUnit.SECONDS);
+        scheduledExecutorService.scheduleAtFixedRate(() -> {
+            System.out.println("Period is 2 seconds... (scheduleAtFixedRate)");
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }, 3, 2, TimeUnit.SECONDS);
+
+        scheduledExecutorService.scheduleWithFixedDelay(() -> {
+            System.out.println("Period is 2 seconds... (scheduleWithFixedDelay)");
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }, 3, 2, TimeUnit.SECONDS);
 
         Thread.sleep(10000);
         scheduledExecutorService.shutdown();
