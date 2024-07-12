@@ -13,13 +13,14 @@ import java.util.concurrent.*;
 public class ExecutorsTest {
 
     @Test
-    @DisplayName("Executors는 ExecutorService 객체를 생성하며, 다음 메소드를 제공하여 쓰레드 풀을 개수 및 종류를 정할 수 있다.")
-    void testCreateExecutorService() {
+    @DisplayName("Executors는 여러 유형의 ExecutorService 객체를 생성하기 위한 팩토리 메서드를 제공한다.")
+    void testCreateExecutorServiceByFactoryMethod() {
         /**
          * newFixedThreadPool(int) : 인자 개수만큼 고정된 쓰레드풀을 만듭니다.
          * newCachedThreadPool(): 필요할 때, 필요한 만큼 쓰레드풀을 생성합니다. 이미 생성된 쓰레드를 재활용할 수 있기 때문에 성능상의 이점이 있을 수 있습니다.
          * newScheduledThreadPool(int): 일정 시간 뒤에 실행되는 작업이나, 주기적으로 수행되는 작업이 있다면 ScheduledThreadPool을 고려해볼 수 있습니다.
          * newSingleThreadExecutor(): 쓰레드 1개인 ExecutorService를 리턴합니다. 싱글 쓰레드에서 동작해야 하는 작업을 처리할 때 사용합니다.
+         * newWorkStealingPool(): 경합을 줄이기 위해 여러 대기열을 사용할 수 있는 스레드풀을 만든다. (내부적으로 커스텀 ForkJoinPool 사용)
          * newVirtualThreadPerTaskExecutor(): 가상스레드를 생성합니다. Executors로 가상스레드를 다루고 싶을 때 사용
          */
 
@@ -88,6 +89,82 @@ public class ExecutorsTest {
     }
 
     @Test
+    @DisplayName("ExecutorService 는 사용 후 종료를 통해 리소스를 반환해줄 수 있다")
+    void testShutdownExecutorService() {
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+
+        // case 1. 모든 작업을 처리한 후 스레드풀 종료 (shutdown is non-blocking)
+        executor.shutdown();
+
+        // case 2. 처리 중인 작업을 interrupt로 중지하고 스레드풀 종료
+        executor.shutdownNow();
+
+        // case 3.
+        // shutdown은 논블로킹임, 때론 shutdown 호출 후 블로킹이 필요할 수 있다.
+        // shutdown 메서드를 우선 호출하고 주어진 타임아웃 내까지 블로킹을 건다.
+        // 작업을 모두 완료했으면 true 반환 그렇지 않으면 false를 반환
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            // shutdown 을 호출한 스레드가 interrupt 상태이면 InterruptedException 를 던진다.
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    @Test
+    @DisplayName("강제 종료 시나리오")
+    void testShutDownNow() {
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+
+        // 매우 긴 시간동안 스레드를 잠재운다.
+        executor.submit(() -> {
+            String threadName = Thread.currentThread().getName();
+            System.out.println("Job1 " + threadName);
+            try {
+                Thread.sleep(300000000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println("Job1 " + threadName + " end");
+        });
+        executor.shutdown(); // 모든 작업이 끝나면 스레드풀을 종료한다.
+        System.out.println("ing......");
+
+        // shutdown() 호출 전에 등록된 Task 중에 아직 완료되지 않은 Task가 있을 수 있습니다.
+        // Timeout을 10초 설정하고 완료되기를 기다립니다.
+        // 10초 전에 완료되면 true를 리턴하며, 10초가 지나도 완료되지 않으면 false를 리턴합니다.
+        try {
+            if (executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                System.out.println(LocalTime.now() + " All jobs are terminated");
+            } else {
+                System.out.println(LocalTime.now() + " some jobs are not terminated, shutdown now");
+
+                // 모든 Task를 강제 종료합니다.
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+        System.out.println("end");
+    }
+
+    @Test
+    @DisplayName("executor.submit()은 Future 객체를 리턴한다.")
+    void testSubmitReturnFuture() {
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+
+        Assertions.assertInstanceOf(Future.class, executor.submit(() -> {}));
+
+        executor.shutdown();
+    }
+
+    @Test
     @DisplayName("executore.submit(..) 파라미터로 Runnable 혹은 Callable 을 넣을 수 있다.")
     void testSubmitParams() {
         ExecutorService executor = Executors.newFixedThreadPool(4);
@@ -102,15 +179,17 @@ public class ExecutorsTest {
         Callable<String> callable = () -> {
             return "hello";
         }; // return String
-        executor.submit(callable);
-    }
 
-    @Test
-    @DisplayName("executor.submit()은 Future 객체를 리턴한다.")
-    void testSubmitReturnFuture() {
-        ExecutorService executor = Executors.newFixedThreadPool(4);
+        Future<String> res = executor.submit(callable);
 
-        Assertions.assertInstanceOf(Future.class, executor.submit(() -> {}));
+        try {
+            String result = res.get();
+            System.out.println(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+
+        executor.shutdown();
     }
 
     @Test
@@ -200,40 +279,8 @@ public class ExecutorsTest {
         Assertions.assertTrue(f.isDone()); // 작업이 완료되어있으므로 true
 
         System.out.println(f.get());
-    }
 
-    @Test
-    @DisplayName("실행 중인 스레드 풀을 강제종료할 수 있다.")
-    void testShutDownNow() throws InterruptedException {
-        ExecutorService executor = Executors.newFixedThreadPool(4);
-
-        // 매우 긴 시간동안 스레드를 잠재운다.
-        executor.submit(() -> {
-            String threadName = Thread.currentThread().getName();
-            System.out.println("Job1 " + threadName);
-            try {
-                Thread.sleep(300000000);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-            System.out.println("Job1 " + threadName + " end");
-        });
-        executor.shutdown(); // 모든 작업이 끝나면 스레드풀을 종료한다.
-        System.out.println("ing......");
-
-        // shutdown() 호출 전에 등록된 Task 중에 아직 완료되지 않은 Task가 있을 수 있습니다.
-        // Timeout을 10초 설정하고 완료되기를 기다립니다.
-        // 10초 전에 완료되면 true를 리턴하며, 10초가 지나도 완료되지 않으면 false를 리턴합니다.
-        if (executor.awaitTermination(10, TimeUnit.SECONDS)) {
-            System.out.println(LocalTime.now() + " All jobs are terminated");
-        } else {
-            System.out.println(LocalTime.now() + " some jobs are not terminated, shutdown now");
-
-            // 모든 Task를 강제 종료합니다.
-            executor.shutdownNow();
-        }
-
-        System.out.println("end");
+        executor.shutdown();
     }
 
     @Test

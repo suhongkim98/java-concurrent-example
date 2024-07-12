@@ -6,4 +6,5 @@
 * `CompleteFutureTest`
 * `CallbackTest`
 * `ConcurrentExampleTest`
+* `ForkJoinPoolExampleTest`
 * `VirtualThreadTest`
