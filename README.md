@@ -7,4 +7,5 @@
 * `CallbackTest`
 * `ConcurrentExampleTest`
 * `ForkJoinPoolExampleTest`
+* `SpringThreadPoolTaskExecutorTest`
 * `VirtualThreadTest`

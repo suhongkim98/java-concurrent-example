@@ -34,6 +34,161 @@ public class ExecutorsTest {
         ExecutorService virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
     }
 
+    @Test
+    @DisplayName("shutdown 메서드는 이미 제출(submit)한 작업이 실행 완료된 후 종료를 진행하며, 더 이상 새로운 작업을 추가하지 않는다.")
+    void testShutdownExecutorService() {
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+
+        // 모든 작업을 처리한 후 스레드풀 종료 (shutdown is non-blocking)
+        executor.shutdown();
+    }
+
+    @Test
+    @DisplayName("shutdownNow 메서드는 활발하게 실행 중인 모든 작업을 interrupt로 중지하려고 시도해 대기 중인 작업의 처리를 중지하고, 실행 대기 중인 작업 목록을 반환")
+    void testShutdownNowExecutorService() {
+        // 싱글 스레드풀
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+
+        executor.submit(() -> {
+            String threadName = Thread.currentThread().getName();
+            System.out.println(threadName);
+            try {
+                Thread.sleep(10000);
+            } catch (InterruptedException e) {
+                System.out.println("== catch InterruptedException ==");
+                throw new RuntimeException(e);
+            }
+        });
+
+        executor.submit(() -> {
+            String threadName = Thread.currentThread().getName();
+            System.out.println(threadName);
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                System.out.println("== catch InterruptedException ==");
+                throw new RuntimeException(e);
+            }
+        });
+
+        // 실행 중인 작업을 강제로 종료시키기 위해 노력은 하지만 반드시 성공한다고 보장할 수 없다.
+        // 예를 들어 Thread#interrupt를 이용해 강제 종료를 구현한 경우 실행 중인 작업이 인터럽트에 대응하도록 설계하지 않았다면 종료되지 않을 수 있다
+        List<Runnable> runnables = executor.shutdownNow();
+
+        // 싱글 스레드풀이라서 1개만 제출되고 대기 큐에 있던 작업 1개만 반환
+        Assertions.assertEquals(1, runnables.size());
+    }
+
+    @Test
+    @DisplayName("close 메서드 활용한 graceful shutdown 예시, 최대 하루까지 모든 작업이 종료되기를 기다리고 종료")
+    void testCloseExecutorService() {
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+
+        executor.submit(() -> {
+            String threadName = Thread.currentThread().getName();
+            System.out.println("== Job1 " + threadName + " start ==");
+
+            for (int i = 0 ; i < 3 ; i++) {
+                try {
+                    System.out.println("task");
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+        executor.close(); // 모든 작업이 끝나면 스레드풀을 종료한다.
+        System.out.println("shutdown waiting......");
+    }
+
+    @Test
+    @DisplayName("java docs graceful shutdown 예시")
+    void testGracefulShutdown() {
+        // shutdown은 논블로킹임
+        // shutdown 메서드를 우선 호출하고 주어진 타임아웃 내까지 블로킹을 건다.
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+
+        // 하나의 잡이 3초가 걸린다고 가정
+        executor.submit(() -> {
+            String threadName = Thread.currentThread().getName();
+            System.out.println("== Job1 " + threadName + " start ==");
+
+            for (int i = 0 ; i < 3 ; i++) {
+                try {
+                    System.out.println("task");
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    System.out.println("== catch InterruptedException ==");
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+        executor.shutdown();
+        System.out.println("shutdown waiting......");
+
+        try {
+            // shutdown() 호출 전에 등록된 Task 중에 아직 완료되지 않은 Task가 있을 수 있습니다.
+            // Timeout을 60초 설정하고 완료되기를 기다립니다.
+            // 60초 전에 완료되면 true를 리턴하며, 60초가 지나도 완료되지 않으면 false를 리턴합니다.
+            if (executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                System.out.println(LocalTime.now() + " All jobs are terminated");
+            } else {
+                System.out.println(LocalTime.now() + " some jobs are not terminated, shutdown now");
+
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            // shutdown 을 호출한 스레드가 interrupt 상태이면 InterruptedException 를 던진다.
+            System.out.println("== catch InterruptedException ==");
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+        System.out.println("end");
+    }
+
+    @Test
+    @DisplayName("무한 루프 시 shutdown 예시, 무한 루프 while 문을 실행하는 작업(Runnable)은 인터럽트로 종료시킬 수 없다")
+    void testLoop() {
+        // shutdown은 논블로킹임, 때론 shutdown 호출 후 블로킹이 필요할 수 있다.
+        // shutdown 메서드를 우선 호출하고 주어진 타임아웃 내까지 블로킹을 건다.
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+
+        // 인터럽트 상태가 설정되어도 아무런 대응을 하지 않기 때문에 무한 루프 작업이 계속됨
+        executor.submit(() -> {
+            String threadName = Thread.currentThread().getName();
+            System.out.println("== Job1 " + threadName + " start ==");
+
+            int i = 0;
+            while (true) {
+                System.out.println("task " + i++);
+            }
+        });
+        executor.shutdown(); // 모든 작업이 끝나면 스레드풀을 종료한다.
+        System.out.println("shutdown waiting......");
+
+        try {
+            // shutdown() 호출 전에 등록된 Task 중에 아직 완료되지 않은 Task가 있을 수 있습니다.
+            // Timeout을 10초 설정하고 완료되기를 기다립니다.
+            // 10초 전에 완료되면 true를 리턴하며, 10초가 지나도 완료되지 않으면 false를 리턴합니다.
+            if (executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                System.out.println(LocalTime.now() + " All jobs are terminated");
+            } else {
+                System.out.println(LocalTime.now() + " some jobs are not terminated, shutdown now");
+
+                // 모든 Task를 강제 종료합니다.
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            // shutdown 을 호출한 스레드가 interrupt 상태이면 InterruptedException 를 던진다.
+            System.out.println("catch InterruptedException");
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+        System.out.println("end");
+    }
+
     /**
      * execute() 메서드와 submit() 메서드의 차이
      *
@@ -86,72 +241,6 @@ public class ExecutorsTest {
 
         // 작업이 모두 완료되면 쓰레드풀을 종료시킵니다.
         executor.shutdown();
-    }
-
-    @Test
-    @DisplayName("ExecutorService 는 사용 후 종료를 통해 리소스를 반환해줄 수 있다")
-    void testShutdownExecutorService() {
-        ExecutorService executor = Executors.newFixedThreadPool(4);
-
-        // case 1. 모든 작업을 처리한 후 스레드풀 종료 (shutdown is non-blocking)
-        executor.shutdown();
-
-        // case 2. 처리 중인 작업을 interrupt로 중지하고 스레드풀 종료
-        executor.shutdownNow();
-
-        // case 3.
-        // shutdown은 논블로킹임, 때론 shutdown 호출 후 블로킹이 필요할 수 있다.
-        // shutdown 메서드를 우선 호출하고 주어진 타임아웃 내까지 블로킹을 건다.
-        // 작업을 모두 완료했으면 true 반환 그렇지 않으면 false를 반환
-        executor.shutdown();
-        try {
-            if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            // shutdown 을 호출한 스레드가 interrupt 상태이면 InterruptedException 를 던진다.
-            executor.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    @Test
-    @DisplayName("강제 종료 시나리오")
-    void testShutDownNow() {
-        ExecutorService executor = Executors.newFixedThreadPool(4);
-
-        // 매우 긴 시간동안 스레드를 잠재운다.
-        executor.submit(() -> {
-            String threadName = Thread.currentThread().getName();
-            System.out.println("Job1 " + threadName);
-            try {
-                Thread.sleep(300000000);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-            System.out.println("Job1 " + threadName + " end");
-        });
-        executor.shutdown(); // 모든 작업이 끝나면 스레드풀을 종료한다.
-        System.out.println("ing......");
-
-        // shutdown() 호출 전에 등록된 Task 중에 아직 완료되지 않은 Task가 있을 수 있습니다.
-        // Timeout을 10초 설정하고 완료되기를 기다립니다.
-        // 10초 전에 완료되면 true를 리턴하며, 10초가 지나도 완료되지 않으면 false를 리턴합니다.
-        try {
-            if (executor.awaitTermination(10, TimeUnit.SECONDS)) {
-                System.out.println(LocalTime.now() + " All jobs are terminated");
-            } else {
-                System.out.println(LocalTime.now() + " some jobs are not terminated, shutdown now");
-
-                // 모든 Task를 강제 종료합니다.
-                executor.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            executor.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-
-        System.out.println("end");
     }
 
     @Test
